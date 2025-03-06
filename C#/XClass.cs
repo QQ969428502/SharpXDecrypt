@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-
 namespace SharpXDecrypt
 {
     class XClass
@@ -23,6 +22,7 @@ namespace SharpXDecrypt
         public static Boolean Decrypt()
         {
             List<string> userDataPaths = GetUserDataPath();
+            List<Xsh> result = new List<Xsh>();
             if (userDataPaths.Count > 0)
             {
                 Utils.UserSID userSID = Utils.GetUserSID();
@@ -43,6 +43,7 @@ namespace SharpXDecrypt
                             Console.WriteLine("  Version: " + xsh.version);
                             Console.WriteLine();
                         }
+                        result.Add(xsh);
                     }
                 }
             }
@@ -51,13 +52,17 @@ namespace SharpXDecrypt
                 Console.WriteLine("[-] UserPath Not Found!");
                 Console.WriteLine("[-] Please try : .\\SharpXDecrypt.exe \"[SessionsPath]\"");
             }
-
+            if (result.Count > 0)
+            {
+                SaveToJsonFile(result);
+            }
             return true;
         }
         public static Boolean Decrypt(string selectPath)
         {
-            Utils.UserSID userSID = Utils.GetUserSID();               
+            Utils.UserSID userSID = Utils.GetUserSID();
             List<string> xshPathList = EnumXshPath(selectPath);
+            List<Xsh> result = new List<Xsh>();
             foreach (string xshPath in xshPathList)
             {
                 Xsh xsh = XSHParser(xshPath);
@@ -70,8 +75,20 @@ namespace SharpXDecrypt
                     Console.WriteLine("  Password: " + xsh.password);
                     Console.WriteLine("  Version: " + xsh.version);
                     Console.WriteLine();
+                    result.Add(xsh);
+                    //result.Add(new {
+                    //    XSHPath = xshPath,
+                    //    Host = xsh.host,
+                    //    UserName = xsh.userName,
+                    //    Password = xsh.password,
+                    //    Version = xsh.version
+                    //});
                 }
-            }   
+            }
+            if (result.Count > 0)
+            {
+                SaveToJsonFile(result);
+            }
             return true;
         }
         public static string Xdecrypt(Xsh xsh, Utils.UserSID userSID)
@@ -105,7 +122,8 @@ namespace SharpXDecrypt
                     Array.Copy(data, 0, passData, 0, data.Length - 0x20);
                     byte[] decrypted = RC4.Decrypt(Key, passData);
                     password = Encoding.Default.GetString(decrypted);
-                }else if (xsh.version.StartsWith("7"))
+                }
+                else if (xsh.version.StartsWith("7"))
                 {
                     string strkey1 = new string(userSID.Name.ToCharArray().Reverse().ToArray()) + userSID.SID;
                     string strkey2 = new string(strkey1.ToCharArray().Reverse().ToArray());
@@ -135,7 +153,7 @@ namespace SharpXDecrypt
             xsh.userName = null;
             xsh.password = null;
             xsh.version = null;
-            xsh.encryptPw = null; 
+            xsh.encryptPw = null;
             using (StreamReader sr = new StreamReader(xshPath))
             {
                 string rawPass;
@@ -263,5 +281,81 @@ namespace SharpXDecrypt
                 }
             }
         }
+        static void SaveToJsonFile(List<Xsh> data, string filePath = null)
+        {
+            if (string.IsNullOrEmpty(filePath))
+            {
+                // 如果 filePath 为空，使用当前目录下的默认文件名
+                filePath = Path.Combine(Environment.CurrentDirectory, "output.json");
+            }
+
+            try
+            {
+                // 转换为 JSON 字符串
+                string json = ConvertToJson(data);
+
+                // 将 JSON 字符串写入文件
+                File.WriteAllText(filePath, json);
+
+                // 输出保存成功的信息
+                Console.WriteLine($"数据已成功保存到 {filePath}");
+            }
+            catch (Exception ex)
+            {
+                // 若出现异常，输出错误信息
+                Console.WriteLine($"保存文件时出错: {ex.Message}");
+            }
+        }
+
+        static string ConvertToJson(List<Xsh> data)
+        {
+            const string indent = "  "; // 缩进空格
+            string json = "[\n";
+
+            for (int i = 0; i < data.Count; i++)
+            {
+                Xsh item = data[i];
+                string objectJson = indent + "{\n";
+                objectJson += $"{indent}{indent}\"host\":\"{EscapeJson(item.host)}\",\n";
+                objectJson += $"{indent}{indent}\"userName\":\"{EscapeJson(item.userName)}\",\n";
+                objectJson += $"{indent}{indent}\"password\":\"{EscapeJson(item.password)}\",\n";
+                objectJson += $"{indent}{indent}\"encryptPw\":\"{EscapeJson(item.encryptPw)}\",\n";
+                objectJson += $"{indent}{indent}\"version\":\"{EscapeJson(item.version)}\"\n";
+                objectJson += indent + "}";
+
+                json += objectJson;
+
+                if (i < data.Count - 1)
+                {
+                    json += ",\n";
+                }
+                else
+                {
+                    json += "\n";
+                }
+            }
+
+            json += "]";
+
+            return json;
+        }
+
+        static string EscapeJson(string input)
+        {
+            if (string.IsNullOrEmpty(input))
+            {
+                return "";
+            }
+
+            // 手动转义特殊字符
+            return input.Replace("\\", "\\\\")
+                        .Replace("\"", "\\\"")
+                        .Replace("\n", "\\n")
+                        .Replace("\r", "\\r")
+                        .Replace("\t", "\\t");
+        }
+
     }
+
+
 }
